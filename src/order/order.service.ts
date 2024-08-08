@@ -1,9 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Order } from './order.schema';
 import { Customer } from '../customer/customer.schema';
 import { Product } from '../product/product.schema';
+import { CreateOrderDto, ProductOrderDto } from './dto/create-order.dto';
+import { GetDailyReportDto } from './dto/get-daily-report.dto';
 
 @Injectable()
 export class OrderService {
@@ -13,32 +19,51 @@ export class OrderService {
     @InjectModel(Product.name) private productModel: Model<Product>,
   ) {}
 
-  async createOrder(orderData: Partial<Order>): Promise<Order> {
-    const customer = await this.customerModel.findById(orderData.customer);
-    if (!customer) {
+  async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
+    const { customer, products } = createOrderDto;
+
+    // Validate the customer ID format
+    if (!Types.ObjectId.isValid(customer)) {
+      throw new BadRequestException('Invalid customer ID format');
+    }
+
+    // Find the customer
+    const customerExists = await this.customerModel.findById(customer);
+    if (!customerExists) {
       throw new NotFoundException('Customer not found');
     }
 
-    const productIds = orderData.products.map(
-      (p) => new Types.ObjectId(p.product),
-    );
+    // Validate each product ID and fetch the products
+    const productIds = products.map((p: ProductOrderDto) => {
+      if (!Types.ObjectId.isValid(p.product)) {
+        throw new BadRequestException(
+          `Invalid product ID format: ${p.product}`,
+        );
+      }
+      return new Types.ObjectId(p.product);
+    });
 
-    const products = await this.productModel.find({ _id: { $in: productIds } });
-    if (products.length !== productIds.length) {
+    const fetchedProducts = await this.productModel.find({
+      _id: { $in: productIds },
+    });
+    if (fetchedProducts.length !== productIds.length) {
       throw new NotFoundException('One or more products not found');
     }
 
-    const totalPrice = products.reduce(
+    // Calculate the total price
+    const totalPrice = fetchedProducts.reduce(
       (sum, product) => sum + product.price,
       0,
     );
 
+    // Create and save the order
     const createdOrder = new this.orderModel({
-      ...orderData,
-      customer: new Types.ObjectId(orderData.customer),
+      ...createOrderDto,
+      customer: new Types.ObjectId(customer),
       products: productIds.map((id) => ({ product: id })),
       totalPrice,
     });
+
     return createdOrder.save();
   }
   async updateOrder(id: string, orderData: Partial<Order>): Promise<Order> {
@@ -74,26 +99,177 @@ export class OrderService {
       .exec();
   }
   async getOrderById(id: string): Promise<Order> {
-    const order = await this.orderModel
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid order ID');
+    }
+    return this.orderModel
       .findById(id)
       .populate('customer')
-      .populate('products.product') // Populate product details
+      .populate({
+        path: 'products.product',
+        select: 'name price',
+      })
       .exec();
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    return order;
   }
 
-  async getAllOrders(): Promise<Order[]> {
-    const orders = await this.orderModel
-      .find()
-      .populate('customer')
-      .populate('products.product') // Populate product details
-      .exec();
+  async getAllOrders(): Promise<any> {
+    const orders = await this.orderModel.aggregate([
+      // Join with the Customer collection
+      {
+        $lookup: {
+          from: 'customers', // Collection name in MongoDB
+          localField: 'customer',
+          foreignField: '_id',
+          as: 'customer',
+        },
+      },
+      { $unwind: '$customer' }, // Deconstruct the customer array
+
+      // Unwind the products array to handle each product individually
+      { $unwind: '$products' },
+
+      // Join with the Product collection for each product
+      {
+        $lookup: {
+          from: 'products', // Collection name in MongoDB
+          localField: 'products.product',
+          foreignField: '_id',
+          as: 'productDetails',
+        },
+      },
+      { $unwind: '$productDetails' }, // Deconstruct the productDetails array
+
+      // Group the orders back together, including detailed product information
+      {
+        $group: {
+          _id: '$_id',
+          customer: { $first: '$customer' },
+          products: {
+            $push: {
+              product_id: '$productDetails._id',
+              name: '$productDetails.name',
+              price: '$productDetails.price',
+            },
+          },
+          totalPrice: { $first: '$totalPrice' },
+          timestamp: { $first: '$timestamp' },
+        },
+      },
+
+      // Project the final fields
+      {
+        $project: {
+          _id: 0,
+          customer: {
+            _id: '$customer._id',
+            name: '$customer.name',
+            email: '$customer.email',
+            phone: '$customer.phone',
+          },
+          products: 1,
+          totalPrice: 1,
+          timestamp: 1,
+        },
+      },
+    ]);
 
     return orders;
+  }
+
+  // Method to get daily sales report
+  async getDailySalesReport(dto: GetDailyReportDto) {
+    const { date } = dto;
+
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    if (isNaN(startOfDay.getTime()) || startOfDay > new Date()) {
+      throw new BadRequestException('Invalid or future date');
+    }
+
+    const report = await this.orderModel.aggregate([
+      {
+        $match: {
+          timestamp: {
+            $gte: startOfDay,
+            $lte: endOfDay,
+          },
+        },
+      },
+      {
+        $unwind: '$products',
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$totalPrice' },
+          numberOfOrders: { $sum: 1 },
+          productCounts: {
+            $push: {
+              product: '$products.product',
+              count: { $sum: 1 },
+            },
+          },
+        },
+      },
+      {
+        $unwind: '$productCounts',
+      },
+      {
+        $group: {
+          _id: '$productCounts.product',
+          totalRevenue: { $first: '$totalRevenue' },
+          numberOfOrders: { $first: '$numberOfOrders' },
+          count: { $sum: '$productCounts.count' },
+        },
+      },
+      {
+        $sort: { count: -1 },
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'productDetails',
+        },
+      },
+      {
+        $unwind: '$productDetails',
+      },
+      {
+        $limit: 5,
+      },
+      {
+        $project: {
+          _id: 0,
+          product_id: '$productDetails._id',
+          name: '$productDetails.name',
+          price: '$productDetails.price',
+          count: 1,
+          totalRevenue: 1,
+          numberOfOrders: 1,
+        },
+      },
+    ]);
+
+    if (!report || report.length === 0) {
+      throw new NotFoundException('No sales data found for the given date');
+    }
+
+    const { totalRevenue, numberOfOrders } = report[0];
+
+    return {
+      totalRevenue,
+      numberOfOrders,
+      topSellingItems: report.map(({ product_id, name, price, count }) => ({
+        product_id,
+        name,
+        price,
+        count,
+      })),
+    };
   }
 }
