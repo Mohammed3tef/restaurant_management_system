@@ -9,6 +9,7 @@ import { ProductModule } from './product/product.module';
     MongooseModule.forRoot(
       'mongodb://localhost:27017/restaurant_management_system',
     ),
+    OrderModule,
     CustomerModule,
     ProductModule,
   ],

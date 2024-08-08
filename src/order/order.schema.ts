@@ -4,12 +4,15 @@ import { Customer } from '../customer/customer.schema';
 import { Product } from '../product/product.schema';
 
 @Schema()
-export class Order {
+export class Order extends Document {
   @Prop({ type: Types.ObjectId, ref: 'Customer', required: true })
-  customer: Customer;
+  customer: Types.ObjectId;
 
-  @Prop({ type: [{ type: Types.ObjectId, ref: 'Product' }], required: true })
-  products: Product[];
+  @Prop({
+    type: [{ _id: false, product: { type: Types.ObjectId, ref: 'Product' } }],
+    required: true,
+  })
+  products: { product: Types.ObjectId }[];
 
   @Prop({ required: true })
   totalPrice: number;

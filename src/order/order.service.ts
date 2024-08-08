@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Order } from './order.schema';
 import { Customer } from '../customer/customer.schema';
 import { Product } from '../product/product.schema';
@@ -9,7 +9,7 @@ import { Product } from '../product/product.schema';
 export class OrderService {
   constructor(
     @InjectModel(Order.name) private orderModel: Model<Order>,
-    @InjectModel(Customer.name) private customerModel: Model<Customer>, // Inject CustomerModel
+    @InjectModel(Customer.name) private customerModel: Model<Customer>,
     @InjectModel(Product.name) private productModel: Model<Product>,
   ) {}
 
@@ -19,10 +19,12 @@ export class OrderService {
       throw new NotFoundException('Customer not found');
     }
 
-    const products = await this.productModel.find({
-      _id: { $in: orderData.products },
-    });
-    if (products.length !== orderData.products.length) {
+    const productIds = orderData.products.map(
+      (p) => new Types.ObjectId(p.product),
+    );
+
+    const products = await this.productModel.find({ _id: { $in: productIds } });
+    if (products.length !== productIds.length) {
       throw new NotFoundException('One or more products not found');
     }
 
@@ -30,10 +32,15 @@ export class OrderService {
       (sum, product) => sum + product.price,
       0,
     );
-    const createdOrder = new this.orderModel({ ...orderData, totalPrice });
+
+    const createdOrder = new this.orderModel({
+      ...orderData,
+      customer: new Types.ObjectId(orderData.customer),
+      products: productIds.map((id) => ({ product: id })),
+      totalPrice,
+    });
     return createdOrder.save();
   }
-
   async updateOrder(id: string, orderData: Partial<Order>): Promise<Order> {
     const order = await this.orderModel.findById(id);
     if (!order) {
@@ -62,16 +69,31 @@ export class OrderService {
 
     return this.orderModel
       .findByIdAndUpdate(id, orderData, { new: true })
-      .populate('customer products');
+      .populate('customer')
+      .populate('products')
+      .exec();
   }
-
   async getOrderById(id: string): Promise<Order> {
-    return this.orderModel.findById(id).populate('customer products').exec();
+    const order = await this.orderModel
+      .findById(id)
+      .populate('customer')
+      .populate('products.product') // Populate product details
+      .exec();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return order;
   }
 
   async getAllOrders(): Promise<Order[]> {
-    return this.orderModel.find().populate('customer products').exec();
-  }
+    const orders = await this.orderModel
+      .find()
+      .populate('customer')
+      .populate('products.product') // Populate product details
+      .exec();
 
-  // Existing methods for generating daily reports remain unchanged
+    return orders;
+  }
 }

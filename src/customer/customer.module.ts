@@ -12,5 +12,6 @@ import { Customer, CustomerSchema } from './customer.schema';
   ],
   providers: [CustomerService],
   controllers: [CustomerController],
+  exports: [MongooseModule], // Ensure MongooseModule is exported
 })
 export class CustomerModule {}
