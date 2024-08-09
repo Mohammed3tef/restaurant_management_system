@@ -5,9 +5,15 @@ services:
     image: mongo:6
     container_name: mongo
     ports:
-      - '27017:27017'
+      - '28017:27017'
     volumes:
       - mongo-data:/data/db
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - '6380:6379'
 
   nestjs-app:
     build:
@@ -18,8 +24,11 @@ services:
       - '3000:3000'
     depends_on:
       - mongo
+      - redis
     environment:
       - MONGO_URI=mongodb://mongo:27017/restaurant_db_docker
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - .:/app
 
