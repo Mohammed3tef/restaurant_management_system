@@ -9,7 +9,7 @@ export class Order extends Document {
   customer: Types.ObjectId;
 
   @Prop({
-    type: [{ _id: false, product: { type: Types.ObjectId, ref: 'Product' } }],
+    type: [{ product: { type: Types.ObjectId, ref: 'Product' } }],
     required: true,
   })
   products: { product: Types.ObjectId }[];

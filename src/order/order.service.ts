@@ -195,7 +195,7 @@ export class OrderService {
       // Project the final fields
       {
         $project: {
-          _id: 0,
+          _id: 1,
           customer: {
             _id: '$customer._id',
             name: '$customer.name',
@@ -304,8 +304,10 @@ export class OrderService {
 
     const { totalRevenue, numberOfOrders } = report[0];
 
+    const roundedTotalRevenue = Math.round(totalRevenue * 100) / 100;
+
     const result = {
-      totalRevenue,
+      totalRevenue: roundedTotalRevenue,
       numberOfOrders,
       topSellingItems: report.map(({ product_id, name, price, count }) => ({
         product_id,
