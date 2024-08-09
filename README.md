@@ -74,11 +74,20 @@ An API collection has been added to the application, allowing you to easily impo
 
 #### Importing the API Collection
 
-##### 1. Locate the api-collection.json file in the docs folder of the repository.
+##### 1. Locate the restaurantmanagementsystem.postman_collection.json file added to the application.
 
 ##### 2. Import the file into your preferred API client (e.g., Postman).
 
-##### 3. The collection will provide pre-configured requests to interact with the API, making it easier to test and explore the endpoints.
+##### 3. The collection includes endpoints for managing customers, products, orders, and generating daily sales reports, providing a comprehensive set of tools to interact with the system's API.
+
+### Endpoints Included
+
+- **Customers**: Endpoints for creating, updating and retrieving data.
+- **Products**: Endpoints for managing product inventory, including adding, updating and retrieving products.
+- **Orders**: Endpoints for handling orders, from creation, updating and retrieving Orders.
+- **Daily Reports**: Endpoints for generating and retrieving daily sales reports.
+
+This collection will make it easier to test and explore the various functionalities of the system's API.
 
 ### Screenshots
 
