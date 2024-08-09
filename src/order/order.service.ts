@@ -10,6 +10,7 @@ import { Customer } from '../customer/customer.schema';
 import { Product } from '../product/product.schema';
 import { CreateOrderDto, ProductOrderDto } from './dto/create-order.dto';
 import { GetDailyReportDto } from './dto/get-daily-report.dto';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class OrderService {
@@ -17,6 +18,7 @@ export class OrderService {
     @InjectModel(Order.name) private orderModel: Model<Order>,
     @InjectModel(Customer.name) private customerModel: Model<Customer>,
     @InjectModel(Product.name) private productModel: Model<Product>,
+    private readonly cacheService: CacheService,
   ) {}
 
   async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
@@ -63,6 +65,9 @@ export class OrderService {
       products: productIds.map((id) => ({ product: id })),
       totalPrice,
     });
+    const formattedDate = new Date().toISOString().split('T')[0];
+    const cacheKey = `daily-report:${formattedDate}`;
+    await this.cacheService.del(cacheKey);
 
     return createdOrder.save();
   }
@@ -91,6 +96,10 @@ export class OrderService {
         0,
       );
     }
+
+    const formattedDate = new Date().toISOString().split('T')[0];
+    const cacheKey = `daily-report:${formattedDate}`;
+    await this.cacheService.del(cacheKey);
 
     return this.orderModel
       .findByIdAndUpdate(id, orderData, { new: true })
@@ -189,6 +198,13 @@ export class OrderService {
       throw new BadRequestException('Invalid or future date');
     }
 
+    const cacheKey = `daily-report:${date}`;
+    const cachedReport = await this.cacheService.get(cacheKey);
+    console.log(cachedReport);
+    if (cachedReport) {
+      return cachedReport;
+    }
+
     const report = await this.orderModel.aggregate([
       {
         $match: {
@@ -261,7 +277,7 @@ export class OrderService {
 
     const { totalRevenue, numberOfOrders } = report[0];
 
-    return {
+    const result = {
       totalRevenue,
       numberOfOrders,
       topSellingItems: report.map(({ product_id, name, price, count }) => ({
@@ -271,5 +287,9 @@ export class OrderService {
         count,
       })),
     };
+
+    await this.cacheService.set(cacheKey, result);
+
+    return result;
   }
 }
