@@ -14,6 +14,7 @@ import { OrderService } from './order.service';
 import { Order } from './order.schema';
 import { Types } from 'mongoose';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 import { GetDailyReportDto } from './dto/get-daily-report.dto';
 
 @Controller('orders')
@@ -28,9 +29,13 @@ export class OrderController {
   @Put(':id')
   async updateOrder(
     @Param('id') id: string,
-    @Body() orderData: Partial<Order>,
+    @Body() updateOrderDto: UpdateOrderDto,
   ): Promise<Order> {
-    return this.orderService.updateOrder(id, orderData);
+    // Check if the ID format is valid
+    if (!Types.ObjectId.isValid(id)) {
+      throw new BadRequestException('Invalid order ID format');
+    }
+    return this.orderService.updateOrder(id, updateOrderDto);
   }
 
   @Get('/daily-report')

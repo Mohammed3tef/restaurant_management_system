@@ -10,6 +10,7 @@ import { Customer } from '../customer/customer.schema';
 import { Product } from '../product/product.schema';
 import { CreateOrderDto, ProductOrderDto } from './dto/create-order.dto';
 import { GetDailyReportDto } from './dto/get-daily-report.dto';
+import { UpdateOrderDto } from './dto/update-order.dto';
 import { CacheService } from '../cache/cache.service';
 
 @Injectable()
@@ -71,38 +72,64 @@ export class OrderService {
 
     return createdOrder.save();
   }
-  async updateOrder(id: string, orderData: Partial<Order>): Promise<Order> {
+  async updateOrder(
+    id: string,
+    updateOrderDto: UpdateOrderDto,
+  ): Promise<Order> {
     const order = await this.orderModel.findById(id);
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    if (orderData.customer) {
-      const customer = await this.customerModel.findById(orderData.customer);
-      if (!customer) {
+    const { customer, products, totalPrice, timestamp } = updateOrderDto;
+
+    // Validate and handle updates to customer
+    if (customer) {
+      if (!Types.ObjectId.isValid(customer)) {
+        throw new BadRequestException('Invalid customer ID format');
+      }
+
+      const customerExists = await this.customerModel.findById(customer);
+      if (!customerExists) {
         throw new NotFoundException('Customer not found');
       }
     }
 
-    if (orderData.products) {
-      const products = await this.productModel.find({
-        _id: { $in: orderData.products },
+    // Validate and handle updates to products
+    if (products) {
+      const productIds = products.map((p) => p.product);
+      const fetchedProducts = await this.productModel.find({
+        _id: { $in: productIds },
       });
-      if (products.length !== orderData.products.length) {
+      if (fetchedProducts.length !== productIds.length) {
         throw new NotFoundException('One or more products not found');
       }
-      orderData.totalPrice = products.reduce(
+
+      // Calculate new total price based on updated products
+      const updatedTotalPrice = fetchedProducts.reduce(
         (sum, product) => sum + product.price,
         0,
       );
+
+      // Set totalPrice if not provided
+      if (totalPrice === undefined) {
+        updateOrderDto.totalPrice = updatedTotalPrice;
+      }
     }
 
+    // Optionally set timestamp to current date and time if needed
+    if (timestamp === undefined) {
+      updateOrderDto.timestamp = new Date();
+    }
+
+    // Invalidate the cache for the updated date
     const formattedDate = new Date().toISOString().split('T')[0];
     const cacheKey = `daily-report:${formattedDate}`;
     await this.cacheService.del(cacheKey);
 
+    // Update the order and return the updated document
     return this.orderModel
-      .findByIdAndUpdate(id, orderData, { new: true })
+      .findByIdAndUpdate(id, updateOrderDto, { new: true })
       .populate('customer')
       .populate('products')
       .exec();
@@ -200,7 +227,7 @@ export class OrderService {
 
     const cacheKey = `daily-report:${date}`;
     const cachedReport = await this.cacheService.get(cacheKey);
-    console.log(cachedReport);
+
     if (cachedReport) {
       return cachedReport;
     }
