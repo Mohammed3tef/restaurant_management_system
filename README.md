@@ -91,7 +91,7 @@ This collection will make it easier to test and explore the various functionalit
 
 ### Screenshots
 
-[![Screenshot-from-2024-08-09-11-01-35.png](https://i.postimg.cc/GpFyDF1w/Screenshot-from-2024-08-09-11-01-35.png)](https://postimg.cc/jWj20J5Z)
+[![Screenshot-from-2024-08-12-15-45-47.png](https://i.postimg.cc/T3n7jzkz/Screenshot-from-2024-08-12-15-45-47.png)](https://postimg.cc/w1TQgGY2)
 [![Screenshot-from-2024-08-09-11-01-41.png](https://i.postimg.cc/1tTs5dY9/Screenshot-from-2024-08-09-11-01-41.png)](https://postimg.cc/phDgssH7)
 [![Screenshot-from-2024-08-09-11-01-49.png](https://i.postimg.cc/SNnYdFpG/Screenshot-from-2024-08-09-11-01-49.png)](https://postimg.cc/rKLpyHsd)
 [![Screenshot-from-2024-08-09-11-01-55.png](https://i.postimg.cc/v8kZQ4pW/Screenshot-from-2024-08-09-11-01-55.png)](https://postimg.cc/0rGsny5Q)
